@@ -64,8 +64,10 @@ The properties that make the system valuable:
   refined.
 - **Deterministic and auditable** — execution never uses AI; the recipe is a
   readable, editable, git-versioned JSON artifact.
-- **Self-healing** — when the format drifts, confidence drops and Fenrir
-  re-learns; a patch that regresses is rolled back.
+- **Autonomously self-healing** — a `fenrir_healer` process reacts to drift
+  (push notification + reconciliation tick), re-learns on its own, keeps the
+  patch only if it improves, and quarantines (emitting `{needs_attention, Sig}`)
+  when it can't — no thrashing, no human in the loop.
 - **Economical** — single-flight + recipe cache: the expensive learning runs
   once per signature, even under concurrent load.
 - **Safe by default** — complex transforms the declarative recipe cannot express
@@ -232,7 +234,8 @@ fenrir/
 │   │   ├── fenrir_job.erl              # perceive→suggest→act→remember + escalate
 │   │   ├── fenrir_recipe_store.erl     # persistence (ETS + disk + versions + rollback)
 │   │   ├── fenrir_confidence_monitor.erl
-│   │   ├── fenrir_drift_detector.erl
+│   │   ├── fenrir_drift_detector.erl   # edge-triggered drift + enumeration
+│   │   ├── fenrir_healer.erl           # autonomous self-healing loop
 │   │   ├── fenrir_learner_gateway.erl  # injectable learning (heuristic / AI)
 │   │   ├── fenrir_singleflight.erl     # concurrent cold-start dedup
 │   │   ├── fenrir_core_nif.erl         # NIF facade

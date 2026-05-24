@@ -1,5 +1,5 @@
 -module(concuerror_tests).
--export([singleflight_computes_once/0]).
+-export([singleflight_computes_once/0, concurrent_drift_single_heal/0]).
 
 %% Model checking (Concuerror) of single-flight.
 %%
@@ -31,5 +31,60 @@ singleflight_computes_once() ->
 count_computed(N) ->
     receive
         computed -> count_computed(N + 1)
+    after 0 -> N
+    end.
+
+%% Model checking (Concuerror) of the healer's in-flight dedup.
+%%
+%% A guard process holds the per-signature status. The first trigger starts a
+%% heal in a SEPARATE process (mirroring async work) that stays in flight until
+%% released; while in flight the status is 'healing'. A second concurrent
+%% trigger (a second drift push, or the reconciliation tick) arriving during
+%% that window must be rejected by the real fenrir_healer:should_heal/1 guard.
+%%
+%% The compute is released only after BOTH triggers have been processed (the
+%% guard acks each), so the in-flight window provably spans both triggers.
+%% Property over ALL interleavings: exactly one compute runs; no deadlock.
+concurrent_drift_single_heal() ->
+    Self = self(),
+    Guard = spawn(fun() -> heal_guard(healthy, Self) end),
+    Guard ! {trigger, Self},            %% drift push #1
+    Guard ! {trigger, Self},            %% drift push #2 / reconcile tick
+    Compute = receive {started, C} -> C end,   %% the single in-flight heal
+    receive acked -> ok end,            %% trigger #1 handled
+    receive acked -> ok end,            %% trigger #2 handled (must be skipped)
+    Compute ! release,
+    receive {healed, _} -> ok end,
+    0 = extra_healed(0),                %% no second compute ever
+    Guard ! stop,
+    ok.
+
+heal_guard(Status, Reporter) ->
+    receive
+        {trigger, From} ->
+            case fenrir_healer:should_heal(Status) of
+                true ->
+                    G = self(),
+                    C = spawn(fun() ->
+                                  receive release ->
+                                      Reporter ! {healed, G},
+                                      G ! done
+                                  end
+                              end),
+                    Reporter ! {started, C},
+                    From ! acked,
+                    heal_guard(healing, Reporter);
+                false ->
+                    From ! acked,
+                    heal_guard(Status, Reporter)
+            end;
+        done ->
+            heal_guard(healed, Reporter);
+        stop ->
+            ok
+    end.
+
+extra_healed(N) ->
+    receive {healed, _} -> extra_healed(N + 1)
     after 0 -> N
     end.

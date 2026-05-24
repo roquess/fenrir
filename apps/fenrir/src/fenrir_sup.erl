@@ -14,9 +14,12 @@ init([]) ->
                    start => {fenrir_confidence_monitor, start_link, []},
                    restart => permanent, type => worker},
     Drift = #{id => fenrir_drift_detector,
-              start => {fenrir_drift_detector, start_link, []},
+              start => {fenrir_drift_detector, start_link, [#{notify => fenrir_healer}]},
               restart => permanent, type => worker},
+    Healer = #{id => fenrir_healer,
+               start => {fenrir_healer, start_link, []},
+               restart => permanent, type => worker},
     JobSup = #{id => fenrir_job_sup,
                start => {fenrir_job_sup, start_link, []},
                restart => permanent, type => supervisor},
-    {ok, {SupFlags, [Store, Confidence, Drift, JobSup]}}.
+    {ok, {SupFlags, [Store, Confidence, Drift, Healer, JobSup]}}.
