@@ -6,11 +6,12 @@
 %% threshold, the source format is considered to have drifted → learning must
 %% be re-triggered. This is the self-healing mechanism.
 
--export([start_link/0, start_link/1, record/2, drifting/1, window/1, reset/1]).
+-export([start_link/0, start_link/1, record/2, drifting/1, window/1, reset/1,
+         drifting_signatures/0]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 
 %% Sig -> [Conf]  (the last WindowSize values, most recent first)
--record(state, {tab, size, threshold}).
+-record(state, {tab, size, threshold, notify}).
 
 start_link() -> start_link(#{}).
 start_link(Opts) ->
@@ -20,23 +21,33 @@ record(Sig, Conf) -> gen_server:call(?MODULE, {record, Sig, Conf}).
 drifting(Sig)     -> gen_server:call(?MODULE, {drifting, Sig}).
 window(Sig)       -> gen_server:call(?MODULE, {window, Sig}).
 reset(Sig)        -> gen_server:call(?MODULE, {reset, Sig}).
+drifting_signatures() -> gen_server:call(?MODULE, drifting_signatures).
 
 init(Opts) ->
     Tab = ets:new(fenrir_drift, [set, private]),
     {ok, #state{tab = Tab,
                 size = maps:get(window_size, Opts, 10),
-                threshold = maps:get(threshold, Opts, 0.9)}}.
+                threshold = maps:get(threshold, Opts, 0.9),
+                notify = maps:get(notify, Opts, undefined)}}.
 
 handle_call({record, Sig, Conf}, _From, S) ->
     Win = get_window(S#state.tab, Sig),
+    WasDrifting = is_drift(Win, S),
     Win2 = lists:sublist([Conf | Win], S#state.size),
     ets:insert(S#state.tab, {Sig, Win2}),
+    NowDrifting = is_drift(Win2, S),
+    case (not WasDrifting) andalso NowDrifting of
+        true  -> notify(S#state.notify, {drift, Sig});
+        false -> ok
+    end,
     {reply, ok, S};
 
 handle_call({drifting, Sig}, _From, S) ->
-    Win = get_window(S#state.tab, Sig),
-    Drift = length(Win) >= S#state.size andalso mean(Win) < S#state.threshold,
-    {reply, Drift, S};
+    {reply, is_drift(get_window(S#state.tab, Sig), S), S};
+
+handle_call(drifting_signatures, _From, S) ->
+    Sigs = [Sig || {Sig, Win} <- ets:tab2list(S#state.tab), is_drift(Win, S)],
+    {reply, Sigs, S};
 
 handle_call({window, Sig}, _From, S) ->
     {reply, get_window(S#state.tab, Sig), S};
@@ -53,6 +64,12 @@ get_window(Tab, Sig) ->
         [{Sig, W}] -> W;
         []         -> []
     end.
+
+is_drift(Win, S) ->
+    length(Win) >= S#state.size andalso mean(Win) < S#state.threshold.
+
+notify(undefined, _Msg) -> ok;
+notify(Target, Msg)     -> catch Target ! Msg, ok.
 
 mean([]) -> 1.0;
 mean(L)  -> lists:sum(L) / length(L).
