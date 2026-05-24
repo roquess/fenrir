@@ -1,66 +1,209 @@
 # Fenrir 🐺
 
-> *Le loup, fils de Loki.* Membre de la famille `loki_*`.
-> **Parser ETL/ELT auto-apprenant** : forge ses propres parsers, apprend ce qu'il dévore.
+> *Le loup, fils de Loki.* Membre de la famille [`loki_*`](https://github.com/roquess).
 
-Fenrir remplace l'écriture manuelle de connecteurs ETL par un moteur qui **apprend
-son parsing** à partir d'échantillons, produit un **artefact déterministe réutilisable**
-(une *recette*), le fait tourner à grande échelle **sans IA**, et n'escalade que les
-cas à faible confiance ou en cas de dérive de format.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.94%2B-orange.svg)](https://www.rust-lang.org/)
+[![Erlang/OTP](https://img.shields.io/badge/erlang%2FOTP-27-red.svg)](https://www.erlang.org/)
+[![Model checked](https://img.shields.io/badge/concurrency-Concuerror%20verified-green.svg)](https://concuerror.com/)
+
+**Parser ETL/ELT auto-apprenant.** Fenrir forge ses propres parsers et apprend ce
+qu'il dévore : au lieu d'écrire un connecteur à la main pour chaque source, il
+**apprend son parsing** à partir d'échantillons, en produit un **artefact
+déterministe réutilisable** (une *recette*), le fait tourner à grande échelle
+**sans IA**, et n'escalade vers l'apprentissage que pour les cas à faible
+confiance ou lors d'une dérive de format.
+
+---
+
+## Pourquoi
+
+Tout pipeline ETL exige un connecteur écrit à la main par source : deviner le
+délimiteur, l'encodage, les types, le mapping de schéma… et ça casse
+silencieusement dès que le format dérive. C'est répétitif, fragile, non
+réutilisable.
+
+Fenrir transforme ce travail en un **état émergent de l'usage** : il observe,
+infère une recette, la persiste, et ne réapprend que si nécessaire.
+
+## Principe directeur
+
+L'IA (l'apprentissage) est un **service séparable**, utilisé uniquement en
+*mode apprentissage*.
+
+| Mode | Dépend de l'IA ? | Propriétés |
+|------|------------------|------------|
+| **Apprentissage** (en ligne) | oui | N échantillons → produit/patche une recette |
+| **Exécution** (hors-ligne) | **non** | ne lit que l'artefact → rapide, reproductible, auditable, déployable partout |
+
+> En Phase 1, l'inducer est un **sniffer heuristique 100 % déterministe**
+> (détection séparateur / en-tête / types) — zéro dépendance externe.
 
 ## Architecture
 
 ```
 Extract (octets bruts)
-   ↓
-Transform = [recette apprise] → serde_json::Value   ← cœur Fenrir
-   ↓
-Load = loki_weave → JSON/YAML/TOML/XML/TOON
+   │
+   ▼
+Transform = [recette apprise] ──▶ serde_json::Value      ← cœur Fenrir
+   │
+   ▼
+Load = loki_weave ──▶ JSON / YAML / TOML / XML / TOON
 ```
 
-- **Orchestration** : Erlang/OTP (`apps/fenrir`) — supervision, boucle cognitive,
-  single-flight.
-- **Cœur déterministe** : Rust (`native/fenrir_core`) exposé via Rustler NIF
-  (`native/fenrir_nif`) — modèle de recette, sniffer heuristique, engine de parsing,
-  scoring de confiance, Load via `loki_weave`.
-- **IA** : service séparable, mode apprentissage uniquement. En Phase 1 l'inducer est
-  un **sniffer heuristique 100% déterministe** (zéro dépendance externe).
+Trois couches :
 
-La boucle d'un job suit `perceive → suggest → act → remember` :
+```
+┌──────────────────────────────────────────────────────────┐
+│  ORCHESTRATION — Erlang/OTP (apps/fenrir)                  │
+│  supervision · boucle cognitive · single-flight           │
+└───────────────┬──────────────────────────┬────────────────┘
+                │ Rustler NIF              │ (réseau, séparable)
+┌───────────────▼─────────────┐  ┌─────────▼──────────────────┐
+│  CŒUR DÉTERMINISTE — Rust    │  │  SERVICE IA (apprentissage) │
+│  recipe · sniff · engine     │  │  inducer (heuristique en P1)│
+│  confidence · load(weave)    │  │                             │
+└──────────────────────────────┘  └─────────────────────────────┘
+     ZÉRO IA en mode exécution
+```
 
-| Primitive | Étape |
-|-----------|-------|
-| Perceive  | échantillonne la source → signature de structure |
-| Suggest   | recette connue ? réutilise (zéro IA) : sinon induit |
-| Act       | applique la recette → `serde_json::Value` → loki_weave |
-| Remember  | persiste la recette versionnée sous sa signature |
+- **Orchestration** — Erlang/OTP (`apps/fenrir/`) : arbre de supervision, boucle
+  d'un job, coordination single-flight.
+- **Cœur déterministe** — Rust (`native/fenrir_core/`) exposé via Rustler NIF
+  (`native/fenrir_nif/`) : modèle de recette, sniffer heuristique, engine de
+  parsing, scoring de confiance, Load délégué à
+  [`loki_weave`](https://github.com/roquess/loki_weave).
+
+## La boucle cognitive
+
+Un job d'ingestion suit `perceive → suggest → act → remember` :
+
+| Primitive | Étape | Détail |
+|-----------|-------|--------|
+| **Perceive** | échantillonne la source | calcule une *signature* de structure |
+| **Suggest**  | recette connue ?         | oui → réutilise (**zéro IA**) ; non → induit |
+| **Act**      | applique la recette      | → `serde_json::Value` → loki_weave |
+| **Remember** | persiste                 | recette versionnée, clé = signature |
+
+Chaque source vue enrichit le `recipe_store` : une source déjà apprise ne
+sollicite **plus jamais** l'apprentissage.
+
+## L'artefact : la recette
+
+Déterministe, lisible, versionnée, diffable dans git :
+
+```json
+{
+  "signature": "csv:sep=;:cols=3:hdr",
+  "version": 1,
+  "backend": "csv",
+  "config": { "sep": ";", "encoding": "utf-8", "header": true, "quote": "\"" },
+  "schema": [
+    { "name": "name", "type": "string", "from": 0 },
+    { "name": "age",  "type": "int",    "from": 1 },
+    { "name": "city", "type": "string", "from": 2, "split": "|", "take": 0 }
+  ],
+  "confidence_rules": { "min_field_match": 0.95 }
+}
+```
+
+Chaque enregistrement parsé porte un **score de confiance** (ratio de champs
+correctement typés). Les champs qui échouent deviennent `null` sans faire planter
+le pipeline — la confiance basse est le signal d'escalade (Phase 2).
+
+## Prérequis
+
+- [Rust](https://www.rust-lang.org/) 1.94+
+- [Erlang/OTP](https://www.erlang.org/) 27
+- [rebar3](https://rebar3.org/)
+- [`loki_weave`](https://github.com/roquess/loki_weave) cloné en dépôt frère
+  (`../loki_weave`)
+- [Concuerror](https://concuerror.com/) (optionnel, pour le model checking)
 
 ## Build
 
-Prérequis : Rust 1.94+, Erlang/OTP 27, rebar3.
-
 ```bash
-rebar3 compile     # compile le NIF Rust + l'app Erlang, copie la DLL dans priv/
+rebar3 compile
+```
+
+Le build enchaîne automatiquement : compilation du NIF Rust → copie de la
+bibliothèque dans `apps/fenrir/priv/` → compilation de l'app Erlang.
+
+## Utilisation
+
+```erlang
+%% Apprend depuis un échantillon, parse des lignes, formate en JSON.
+Sample = <<"name;age\nAlice;30\nBob;25\n">>,
+Lines  = [<<"Carol;40">>, <<"Dan;22">>],
+{ok, Json} = fenrir:ingest(Sample, Lines, <<"json">>).
+%% => [{"name":"Carol","age":40},{"name":"Dan","age":22}]
 ```
 
 ## Tests
 
 ```bash
-# Cœur Rust (modèle, engine, sniffer, Load, proptest, corpus doré)
+# Cœur Rust : modèle, engine, sniffer, Load, property tests, corpus doré
 cd native/fenrir_core && cargo test
 
-# Orchestration OTP (recipe_store, job loop, single-flight, e2e via NIF réel)
+# Orchestration OTP : recipe_store, boucle job, single-flight, e2e via NIF réel
 rebar3 ct
 
-# Model checking de la concurrence (single-flight, tous entrelacements)
+# Model checking de la concurrence (tous les entrelacements)
 scripts/model_check.sh
 ```
 
-## Statut
+### Model checking
 
-**Phase 1 livrée** : pipeline CSV déterministe « apprend-une-fois puis tourne ».
+La coordination single-flight (qui garantit qu'un démarrage à froid concurrent
+ne déclenche **qu'un seul** apprentissage coûteux) est vérifiée formellement par
+[Concuerror](https://concuerror.com/) : il explore **tous** les entrelacements
+d'ordonnancement et prouve l'absence de course et de deadlock.
 
-Phases suivantes (plans dans `docs/superpowers/plans/`) :
-- Phase 2 — confiance + escalade (boucle hybride complète, gateway IA)
-- Phase 3 — XML (`loki_xml`) + détection de dérive
-- Phase 4 — text/pdf + échappatoire code généré sandboxé
+```
+Summary: 0 errors, 4/4 interleavings explored
+```
+
+## Structure
+
+```
+fenrir/
+├── apps/fenrir/            # Application OTP (orchestration)
+│   ├── src/
+│   │   ├── fenrir.erl              # API publique (ingest/3)
+│   │   ├── fenrir_job.erl          # boucle perceive→suggest→act→remember
+│   │   ├── fenrir_recipe_store.erl # persistance (ETS + disque + versions)
+│   │   ├── fenrir_singleflight.erl # dédup du cold-start concurrent
+│   │   ├── fenrir_core_nif.erl     # façade NIF
+│   │   └── fenrir_{app,sup,job_sup}.erl
+│   └── test/                       # Common Test + entrée Concuerror
+├── native/
+│   ├── fenrir_core/        # cœur Rust pur (testable en isolation)
+│   └── fenrir_nif/         # bindings Rustler
+├── scripts/model_check.sh
+└── docs/superpowers/       # spec + plans d'implémentation
+```
+
+## Feuille de route
+
+| Phase | Contenu | Statut |
+|-------|---------|--------|
+| **1** | Pipeline CSV déterministe « apprend-une-fois puis tourne » | ✅ **livré** |
+| **2** | Confiance + escalade : `confidence_monitor`, gateway IA, patch de recette + rollback | à venir |
+| **3** | Backend `loki_xml` + détection de dérive de format | à venir |
+| **4** | `loki_text`/`loki_pdf` + échappatoire code généré sandboxé (rhai) | à venir |
+
+Spec et plans détaillés dans [`docs/superpowers/`](docs/superpowers/).
+
+## Famille loki
+
+Fenrir s'appuie sur et complète l'écosystème :
+
+- [`loki_weave`](https://github.com/roquess/loki_weave) — normalise et formate (le *Load*)
+- [`loki_csv`](https://github.com/roquess/loki_csv) — parsing CSV (Erlang/OTP)
+- [`loki_xml`](https://github.com/roquess/loki_xml) — parsing XML (Erlang/OTP)
+- [`loki_text`](https://github.com/roquess/loki_text) — manipulation de texte (Rust)
+- [`loki_pdf`](https://github.com/roquess/loki_pdf) — PDF (Rust/WASM)
+
+## Licence
+
+[MIT](LICENSE) © 2026 Roques Steve
