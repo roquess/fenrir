@@ -213,19 +213,33 @@ cd native/fenrir_core && cargo test
 # OTP orchestration: recipe_store, job loop, single-flight, e2e via the real NIF
 rebar3 ct
 
-# Concurrency model checking (all interleavings)
-scripts/model_check.sh
+# Concurrency model checking — run every property
+scripts/model_check_all.sh
+# …or a single property
+scripts/model_check.sh singleflight_computes_once
 ```
 
 ### Model checking
 
-The single-flight coordination (which guarantees a concurrent cold start
-triggers **only one** expensive learning) is formally verified by
-[Concuerror](https://concuerror.com/): it explores **all** scheduling
-interleavings and proves the absence of races and deadlocks.
+Fenrir's concurrency invariants are formally verified by
+[Concuerror](https://concuerror.com/), which explores **all** scheduling
+interleavings of a property and proves the absence of races and deadlocks. Each
+model reuses the real pure logic where possible (e.g. `would_drift/3`,
+`rollback_history/1`, `should_heal/1`).
+
+| Property | Verifies |
+|----------|----------|
+| `singleflight_computes_once` | concurrent cold start → exactly one learning |
+| `concurrent_drift_single_heal` | concurrent drift triggers → one in-flight heal |
+| `stream_demand_exactly_once` | demand protocol delivers each record once |
+| `drift_edge_single_notify` | edge-trigger fires exactly once across the threshold |
+| `store_rollback_one_winner` | concurrent rollbacks → one winner, no double-undo |
+| `confidence_no_lost_update` | concurrent observes → no lost update |
 
 ```
-Summary: 0 errors, 4/4 interleavings explored
+$ scripts/model_check_all.sh
+…
+ALL MODEL CHECKS PASSED
 ```
 
 ## Structure

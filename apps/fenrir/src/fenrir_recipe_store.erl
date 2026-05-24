@@ -3,6 +3,7 @@
 
 -export([start_link/0, start_link/1, put/2, get/1, history/1, rollback/1]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
+-export([rollback_history/1]).
 
 %% tab  : Sig -> current Recipe
 %% hist : Sig -> [Recipe]  (most recent first)
@@ -49,14 +50,24 @@ handle_call({history, Sig}, _From, S) ->
 
 handle_call({rollback, Sig}, _From, S) ->
     case ets:lookup(S#state.hist, Sig) of
-        [{Sig, [_Latest, Prev | Rest]}] ->
-            ets:insert(S#state.tab, {Sig, Prev}),
-            ets:insert(S#state.hist, {Sig, [Prev | Rest]}),
-            maybe_persist(S, Sig, Prev),
-            {reply, {ok, Prev}, S};
-        _ ->
+        [{Sig, Hist}] ->
+            case rollback_history(Hist) of
+                {ok, Prev, NewHist} ->
+                    ets:insert(S#state.tab, {Sig, Prev}),
+                    ets:insert(S#state.hist, {Sig, NewHist}),
+                    maybe_persist(S, Sig, Prev),
+                    {reply, {ok, Prev}, S};
+                {error, no_previous} ->
+                    {reply, {error, no_previous}, S}
+            end;
+        [] ->
             {reply, {error, no_previous}, S}
     end.
+
+%% Pure rollback over a version history (most recent first). Shared with model
+%% checking: dropping the latest version makes the previous one current.
+rollback_history([_Latest, Prev | Rest]) -> {ok, Prev, [Prev | Rest]};
+rollback_history(_) -> {error, no_previous}.
 
 handle_cast(_, S) -> {noreply, S}.
 terminate(_, _) -> ok.

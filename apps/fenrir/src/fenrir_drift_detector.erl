@@ -7,7 +7,7 @@
 %% be re-triggered. This is the self-healing mechanism.
 
 -export([start_link/0, start_link/1, record/2, drifting/1, window/1, reset/1,
-         drifting_signatures/0]).
+         drifting_signatures/0, would_drift/3]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 
 %% Sig -> [Conf]  (the last WindowSize values, most recent first)
@@ -66,7 +66,11 @@ get_window(Tab, Sig) ->
     end.
 
 is_drift(Win, S) ->
-    length(Win) >= S#state.size andalso mean(Win) < S#state.threshold.
+    would_drift(Win, S#state.size, S#state.threshold).
+
+%% Pure drift predicate (shared with model checking).
+would_drift(Win, Size, Threshold) ->
+    length(Win) >= Size andalso mean(Win) < Threshold.
 
 notify(undefined, _Msg) -> ok;
 notify(Target, Msg)     -> catch Target ! Msg, ok.
