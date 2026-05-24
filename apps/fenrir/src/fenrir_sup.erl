@@ -10,7 +10,13 @@ init([]) ->
     Store = #{id => fenrir_recipe_store,
               start => {fenrir_recipe_store, start_link, []},
               restart => permanent, type => worker},
+    Confidence = #{id => fenrir_confidence_monitor,
+                   start => {fenrir_confidence_monitor, start_link, []},
+                   restart => permanent, type => worker},
+    Drift = #{id => fenrir_drift_detector,
+              start => {fenrir_drift_detector, start_link, []},
+              restart => permanent, type => worker},
     JobSup = #{id => fenrir_job_sup,
                start => {fenrir_job_sup, start_link, []},
                restart => permanent, type => supervisor},
-    {ok, {SupFlags, [Store, JobSup]}}.
+    {ok, {SupFlags, [Store, Confidence, Drift, JobSup]}}.
