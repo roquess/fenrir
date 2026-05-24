@@ -1,0 +1,8 @@
+{application, fenrir,
+ [{description, "Fenrir — self-learning ETL parser"},
+  {vsn, "0.1.0"},
+  {registered, [fenrir_sup]},
+  {mod, {fenrir_app, []}},
+  {applications, [kernel, stdlib]},
+  {env, []}
+ ]}.
