@@ -7,3 +7,5 @@ rebar3.crashdump
 *.so
 *.dll
 *.dylib
+concuerror_report.txt
+*.coverdata
