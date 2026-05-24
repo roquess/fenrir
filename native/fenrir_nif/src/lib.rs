@@ -3,6 +3,7 @@ use fenrir_core::{
     load::load,
     recipe::Recipe,
     sniff::{relearn, sniff},
+    xml::{detect_format, parse_record_xml, sniff_xml, XmlRecipe},
 };
 
 #[rustler::nif(name = "sniff")]
@@ -29,6 +30,27 @@ fn relearn_nif(prev_recipe_json: String, corpus: String) -> String {
     };
     let recipe = relearn(&prev, &corpus);
     serde_json::to_string(&recipe).unwrap_or_else(|e| format!("{{\"error\":\"{e}\"}}"))
+}
+
+#[rustler::nif(name = "detect_format")]
+fn detect_format_nif(sample: String) -> String {
+    detect_format(&sample).to_string()
+}
+
+#[rustler::nif(name = "sniff_xml")]
+fn sniff_xml_nif(sample: String) -> String {
+    let recipe = sniff_xml(&sample);
+    serde_json::to_string(&recipe).unwrap_or_else(|e| format!("{{\"error\":\"{e}\"}}"))
+}
+
+#[rustler::nif(name = "parse_xml")]
+fn parse_xml_nif(recipe_json: String, fragment: String) -> (String, f64) {
+    let recipe: XmlRecipe = match serde_json::from_str(&recipe_json) {
+        Ok(r) => r,
+        Err(e) => return (format!("{{\"error\":\"{e}\"}}"), 0.0),
+    };
+    let out = parse_record_xml(&recipe, &fragment);
+    (serde_json::to_string(&out.value).unwrap_or_default(), out.confidence)
 }
 
 #[rustler::nif(name = "load")]

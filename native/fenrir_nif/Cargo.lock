@@ -44,6 +44,7 @@ version = "0.1.0"
 dependencies = [
  "csv",
  "loki_weave",
+ "quick-xml",
  "serde",
  "serde_json",
 ]

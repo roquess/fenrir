@@ -91,6 +91,7 @@ dependencies = [
  "csv",
  "loki_weave",
  "proptest",
+ "quick-xml",
  "serde",
  "serde_json",
 ]
