@@ -74,6 +74,10 @@ The properties that make the system valuable:
   run in a resource-limited sandbox.
 - **Multi-format** — CSV (with dialect detection), XML (repeated element +
   fields), text/semi-structured (named-capture regex pattern, e.g. logs).
+- **Parallel streaming** — `fenrir_stream` parses across a worker pool with
+  demand-driven backpressure (bounded memory) and at-least-once fault tolerance;
+  per-record confidence still feeds the healer. Single-node now, multi-node by
+  design (pid-based demand protocol).
 
 > **Where are we?** All four phases are delivered: the deterministic loop
 > (perceive → suggest → act → remember, model-checked single-flight), escalation
@@ -238,6 +242,8 @@ fenrir/
 │   │   ├── fenrir_healer.erl           # autonomous self-healing loop
 │   │   ├── fenrir_learner_gateway.erl  # injectable learning (heuristic / AI)
 │   │   ├── fenrir_singleflight.erl     # concurrent cold-start dedup
+│   │   ├── fenrir_stream.erl           # demand-driven parallel coordinator
+│   │   ├── fenrir_stream_worker.erl    # streaming parse worker
 │   │   ├── fenrir_core_nif.erl         # NIF facade
 │   │   └── fenrir_{app,sup,job_sup}.erl
 │   └── test/                           # Common Test + Concuerror entry point

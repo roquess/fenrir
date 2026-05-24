@@ -1,5 +1,6 @@
 -module(concuerror_tests).
--export([singleflight_computes_once/0, concurrent_drift_single_heal/0]).
+-export([singleflight_computes_once/0, concurrent_drift_single_heal/0,
+         stream_demand_exactly_once/0]).
 
 %% Model checking (Concuerror) of single-flight.
 %%
@@ -88,3 +89,36 @@ extra_healed(N) ->
     receive {healed, _} -> extra_healed(N + 1)
     after 0 -> N
     end.
+
+%% Model checking (Concuerror) of the demand protocol.
+%%
+%% A coordinator hands one record per demand to whichever worker asks; when the
+%% records run out it replies 'done' to each worker. Two workers contend. The
+%% real coordinator serializes demands in its mailbox exactly like this model.
+%% Property over ALL interleavings: each record is delivered to exactly one
+%% worker (no loss, no duplication) and every process terminates (no deadlock).
+stream_demand_exactly_once() ->
+    Self = self(),
+    Coord = spawn(fun() -> sd_coord([a, b, c], 2) end),
+    spawn(fun() -> sd_worker(Coord, Self) end),
+    spawn(fun() -> sd_worker(Coord, Self) end),
+    Got = sd_collect(3, []),
+    [a, b, c] = lists:sort(Got),
+    ok.
+
+sd_coord([R | T], Wc) ->
+    receive {demand, W} -> W ! {batch, R}, sd_coord(T, Wc) end;
+sd_coord([], Wc) when Wc > 0 ->
+    receive {demand, W} -> W ! done, sd_coord([], Wc - 1) end;
+sd_coord([], 0) ->
+    ok.
+
+sd_worker(Coord, Rep) ->
+    Coord ! {demand, self()},
+    receive
+        {batch, R} -> Rep ! {got, R}, sd_worker(Coord, Rep);
+        done -> ok
+    end.
+
+sd_collect(0, Acc) -> Acc;
+sd_collect(N, Acc) -> receive {got, R} -> sd_collect(N - 1, [R | Acc]) end.
