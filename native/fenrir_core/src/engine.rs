@@ -1,4 +1,5 @@
 use crate::recipe::{Field, FieldType, Recipe};
+use crate::sandbox;
 use serde_json::{Map, Value};
 
 pub struct ParsedRecord {
@@ -30,9 +31,26 @@ pub fn parse_line(recipe: &Recipe, line: &str) -> ParsedRecord {
     } else {
         matched as f64 / total as f64
     };
+
+    // Échappatoire : applique les transformations sandboxées après coercition.
+    apply_transforms(recipe, &mut obj);
+
     ParsedRecord {
         value: Value::Object(obj),
         confidence,
+    }
+}
+
+fn apply_transforms(recipe: &Recipe, obj: &mut Map<String, Value>) {
+    for t in &recipe.transforms {
+        let input = match obj.get(&t.field) {
+            Some(Value::String(s)) => s.clone(),
+            Some(other) => other.to_string(),
+            None => continue,
+        };
+        if let Ok(out) = sandbox::run_snippet(&t.code, &input) {
+            obj.insert(t.field.clone(), Value::String(out));
+        }
     }
 }
 
@@ -127,6 +145,7 @@ mod tests {
                 },
             ],
             confidence_rules: ConfidenceRules::default(),
+            transforms: vec![],
         }
     }
 
@@ -146,5 +165,17 @@ mod tests {
         let out = parse_line(&r, "Bob;notanumber;Lyon");
         assert_eq!(out.value["age"], serde_json::Value::Null);
         assert!(out.confidence < 1.0);
+    }
+
+    #[test]
+    fn applies_sandboxed_transform_to_field() {
+        let mut r = recipe();
+        r.transforms = vec![Transform {
+            field: "name".into(),
+            lang: "rhai".into(),
+            code: "input.to_upper()".into(),
+        }];
+        let out = parse_line(&r, "Alice;30;Paris|FR");
+        assert_eq!(out.value["name"], serde_json::json!("ALICE"));
     }
 }

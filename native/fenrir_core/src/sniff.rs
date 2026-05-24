@@ -52,6 +52,7 @@ pub fn sniff(sample: &str) -> Recipe {
         },
         schema,
         confidence_rules: ConfidenceRules::default(),
+        transforms: vec![],
     }
 }
 

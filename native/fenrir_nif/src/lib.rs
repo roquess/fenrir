@@ -3,6 +3,7 @@ use fenrir_core::{
     load::load,
     recipe::Recipe,
     sniff::{relearn, sniff},
+    text::{parse_text, recipe_from_pattern, TextRecipe},
     xml::{detect_format, parse_record_xml, sniff_xml, XmlRecipe},
 };
 
@@ -50,6 +51,22 @@ fn parse_xml_nif(recipe_json: String, fragment: String) -> (String, f64) {
         Err(e) => return (format!("{{\"error\":\"{e}\"}}"), 0.0),
     };
     let out = parse_record_xml(&recipe, &fragment);
+    (serde_json::to_string(&out.value).unwrap_or_default(), out.confidence)
+}
+
+#[rustler::nif(name = "sniff_text")]
+fn sniff_text_nif(pattern: String) -> String {
+    let recipe = recipe_from_pattern(&pattern);
+    serde_json::to_string(&recipe).unwrap_or_else(|e| format!("{{\"error\":\"{e}\"}}"))
+}
+
+#[rustler::nif(name = "parse_text")]
+fn parse_text_nif(recipe_json: String, line: String) -> (String, f64) {
+    let recipe: TextRecipe = match serde_json::from_str(&recipe_json) {
+        Ok(r) => r,
+        Err(e) => return (format!("{{\"error\":\"{e}\"}}"), 0.0),
+    };
+    let out = parse_text(&recipe, &line);
     (serde_json::to_string(&out.value).unwrap_or_default(), out.confidence)
 }
 

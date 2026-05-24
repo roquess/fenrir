@@ -9,6 +9,17 @@ pub struct Recipe {
     pub schema: Vec<Field>,
     #[serde(default)]
     pub confidence_rules: ConfidenceRules,
+    /// Échappatoire « code généré » : transformations par champ exécutées en
+    /// bac à sable après coercition. Vide par défaut.
+    #[serde(default)]
+    pub transforms: Vec<Transform>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Transform {
+    pub field: String,
+    pub lang: String,
+    pub code: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -91,6 +102,7 @@ mod tests {
                 },
             ],
             confidence_rules: ConfidenceRules::default(),
+            transforms: vec![],
         };
         let json = serde_json::to_string(&r).unwrap();
         let back: Recipe = serde_json::from_str(&json).unwrap();

@@ -9,6 +9,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 csv = "1"
 quick-xml = "0.39"
+regex = "1"
+rhai = "1"
 loki_weave = { path = "../../../loki_weave" }
 
 [dev-dependencies]

@@ -1,6 +1,7 @@
 -module(fenrir_core_nif).
 -export([sniff/1, parse_line/2, relearn/2, load/2,
-         detect_format/1, sniff_xml/1, parse_xml/2]).
+         detect_format/1, sniff_xml/1, parse_xml/2,
+         sniff_text/1, parse_text/2]).
 -on_load(init/0).
 
 -define(APPNAME, fenrir).
@@ -19,3 +20,5 @@ load(_ValueJson, _Format) -> erlang:nif_error(nif_not_loaded).
 detect_format(_Sample) -> erlang:nif_error(nif_not_loaded).
 sniff_xml(_Sample) -> erlang:nif_error(nif_not_loaded).
 parse_xml(_RecipeJson, _Fragment) -> erlang:nif_error(nif_not_loaded).
+sniff_text(_Pattern) -> erlang:nif_error(nif_not_loaded).
+parse_text(_RecipeJson, _Line) -> erlang:nif_error(nif_not_loaded).

@@ -71,12 +71,16 @@ Les propriétés qui font la valeur du système :
 - **Économe** — single-flight + cache de recettes : l'apprentissage coûteux ne
   tourne qu'une fois par signature, même sous charge concurrente.
 - **Sûr par défaut** — les transformations complexes que la recette déclarative
-  ne peut exprimer s'exécutent dans un bac à sable à ressources limitées.
+  ne peut exprimer s'exécutent dans un bac à sable [rhai](https://rhai.rs/) à
+  ressources limitées (nombre d'opérations plafonné).
+- **Multi-format** — CSV (avec détection de dialecte), XML (élément répété +
+  champs), texte/semi-structuré (patron regex à groupes nommés, ex. logs).
 
-> **Où en est-on ?** La Phase 1 (le squelette déterministe : perceive → suggest →
-> act → remember, single-flight model-checké, pipeline CSV bout-en-bout) est
-> livrée. Les Phases 2-4 ajoutent l'escalade, la détection de dérive, les backends
-> XML/texte/PDF et le bac à sable. Voir la [feuille de route](#feuille-de-route).
+> **Où en est-on ?** Les quatre phases sont livrées : la boucle déterministe
+> (perceive → suggest → act → remember, single-flight model-checké), l'escalade
+> avec rollback anti-régression, la détection de dérive, les backends CSV / XML /
+> texte, et le bac à sable rhai pour le code généré. Voir la
+> [feuille de route](#feuille-de-route).
 
 ## Principe directeur
 
@@ -240,9 +244,9 @@ fenrir/
 | Phase | Contenu | Statut |
 |-------|---------|--------|
 | **1** | Pipeline CSV déterministe « apprend-une-fois puis tourne » | ✅ **livré** |
-| **2** | Confiance + escalade : `confidence_monitor`, gateway IA, patch de recette + rollback | à venir |
-| **3** | Backend `loki_xml` + détection de dérive de format | à venir |
-| **4** | `loki_text`/`loki_pdf` + échappatoire code généré sandboxé (rhai) | à venir |
+| **2** | Confiance + escalade : `confidence_monitor`, gateway d'apprentissage, patch de recette + rollback anti-régression | ✅ **livré** |
+| **3** | Backend XML + détection de dérive de format (`drift_detector`) | ✅ **livré** |
+| **4** | Backend texte/semi-structuré (regex) + échappatoire code généré sandboxé (rhai) | ✅ **livré** |
 
 Spec et plans détaillés dans [`docs/superpowers/`](docs/superpowers/).
 
