@@ -1,7 +1,7 @@
 -module(fenrir_stream).
 -behaviour(gen_server).
 
--export([run/4, list_source/1, file_source/1]).
+-export([run/4, list_source/1, file_source/1, writer_sink/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
 %% ---- Sources : fun(() -> {ok, binary()} | eof) ----
@@ -43,6 +43,13 @@ strip_nl(Bin) ->
              end
     end.
 
+%% Packages a fenrir_writer as a stream sink. Returns {Sink, AwaitFun}: pass
+%% Sink to run/4, then call AwaitFun() AFTER run/4 returns (all workers finished,
+%% so no more sink calls) to close the file and get the written count.
+writer_sink(Path, Format) ->
+    {ok, W} = fenrir_writer:start(Path, Format),
+    {fenrir_writer:sink(W), fun() -> fenrir_writer:close(W) end}.
+
 %% ---- coordinator ----
 
 -record(st, {source, recipe_json, sig, nif, sink, batch_size, pool_size,
@@ -74,9 +81,19 @@ init(#{source := Source, recipe := Recipe, sink := Sink, opts := Opts, caller :=
               nif = Nif, sink = Sink,
               batch_size = BatchSize, pool_size = PoolSize,
               caller = Caller},
-    St = lists:foldl(fun(_, Acc) -> spawn_worker(Acc) end, St0,
+    %% Drop leading records (e.g. a CSV header) before workers start.
+    StSkipped = drain(St0, maps:get(skip, Opts, 0)),
+    St = lists:foldl(fun(_, Acc) -> spawn_worker(Acc) end, StSkipped,
                      lists:seq(1, PoolSize)),
     {ok, St}.
+
+drain(St, 0) ->
+    St;
+drain(#st{source = Src} = St, N) when N > 0 ->
+    case Src() of
+        {ok, _} -> drain(St, N - 1);
+        eof     -> St#st{source_done = true}
+    end.
 
 handle_call(_, _, S) -> {reply, ok, S}.
 handle_cast(_, S) -> {noreply, S}.

@@ -186,7 +186,18 @@ rebar3 compile
 The build chains automatically: compile the Rust NIF → copy the shared library
 into `apps/fenrir/priv/` → compile the Erlang app.
 
-## Usage
+## CLI
+
+```bash
+rebar3 compile
+bin/fenrir ingest data.csv --to json -o out.jsonl --sample 50
+# => #{processed => N, written => N, output => <<"out.jsonl">>}
+```
+
+Output is JSONL (one JSON object per line) — the streaming-native format. A
+runnable example: `bash examples/run.sh`.
+
+## Usage (library)
 
 ```erlang
 %% Learn from a sample, parse lines, format as JSON.
@@ -258,6 +269,8 @@ fenrir/
 │   │   ├── fenrir_singleflight.erl     # concurrent cold-start dedup
 │   │   ├── fenrir_stream.erl           # demand-driven parallel coordinator
 │   │   ├── fenrir_stream_worker.erl    # streaming parse worker
+│   │   ├── fenrir_writer.erl           # serializing JSONL writer sink
+│   │   ├── fenrir_cli.erl              # ingest CLI (bin/fenrir)
 │   │   ├── fenrir_core_nif.erl         # NIF facade
 │   │   └── fenrir_{app,sup,job_sup}.erl
 │   └── test/                           # Common Test + Concuerror entry point

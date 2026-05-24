@@ -1,0 +1,40 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout loki_weave (path dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: roquess/loki_weave
+          path: loki_weave_dep
+
+      - name: Place loki_weave as sibling
+        run: mv loki_weave_dep ../loki_weave
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27'
+          rebar3-version: '3.24.0'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust core tests
+        run: cd native/fenrir_core && cargo test
+
+      - name: Common Test
+        run: rebar3 ct
+
+      - name: Build Concuerror
+        run: |
+          git clone --depth 1 https://github.com/parapluu/Concuerror.git "$HOME/Concuerror"
+          (cd "$HOME/Concuerror" && rebar3 escriptize)
+
+      - name: Model checks
+        run: CONCUERROR_DIR="$HOME/Concuerror" scripts/model_check_all.sh

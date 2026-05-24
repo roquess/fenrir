@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Thin wrapper: runs the Fenrir CLI on the BEAM with the app + deps on the path.
+# The NIF loads from priv/ as usual (no escript packaging).
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+exec erl -pa "$ROOT"/_build/default/lib/*/ebin -noshell -run fenrir_cli main "$@"
