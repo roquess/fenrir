@@ -32,7 +32,7 @@ pub fn parse_line(recipe: &Recipe, line: &str) -> ParsedRecord {
         matched as f64 / total as f64
     };
 
-    // Échappatoire : applique les transformations sandboxées après coercition.
+    // Escape hatch: apply sandboxed transforms after coercion.
     apply_transforms(recipe, &mut obj);
 
     ParsedRecord {
@@ -80,8 +80,8 @@ fn coerce(cell: &str, ty: FieldType) -> Option<Value> {
     }
 }
 
-/// Découpe CSV minimale gérant les guillemets. Partagée avec le sniffer
-/// pour garantir un découpage cohérent (alignement des colonnes).
+/// Minimal quote-aware CSV splitter. Shared with the sniffer to guarantee
+/// consistent splitting (column alignment).
 pub fn split_csv(line: &str, sep: char, quote: char) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();

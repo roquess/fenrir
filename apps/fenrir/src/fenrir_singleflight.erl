@@ -1,17 +1,16 @@
 -module(fenrir_singleflight).
 
-%% Single-flight : quand plusieurs requêtes concurrentes demandent à apprendre
-%% LA MÊME source (clé) avant qu'une recette n'existe, une seule exécute le
-%% calcul coûteux (sniff/IA) — c'est le « leader » ; les autres attendent et
-%% partagent son résultat. Garantit zéro appel redondant lors d'un démarrage
-%% à froid concurrent.
+%% Single-flight: when several concurrent requests ask to learn THE SAME
+%% source (key) before a recipe exists, only one runs the expensive
+%% computation (sniff/AI) — it is the "leader"; the others wait and share its
+%% result. Guarantees zero redundant calls during a concurrent cold start.
 %%
-%% Implémenté en pur passage de messages (spawn/send/receive) : vérifiable par
-%% model checking (Concuerror) sur tous les entrelacements.
+%% Implemented with pure message passing (spawn/send/receive): verifiable by
+%% model checking (Concuerror) over all interleavings.
 
 -export([start/0, stop/1, acquire/3, loop/1]).
 
-%% Démarre le coordinateur. Retourne son pid.
+%% Starts the coordinator. Returns its pid.
 start() ->
     spawn(?MODULE, loop, [#{}]).
 
@@ -20,7 +19,7 @@ stop(Coord) ->
     ok.
 
 %% acquire(Coord, Key, ComputeFun) -> Result
-%% ComputeFun :: fun(() -> Result), exécutée par le seul leader.
+%% ComputeFun :: fun(() -> Result), run by the single leader only.
 acquire(Coord, Key, ComputeFun) ->
     Coord ! {acquire, Key, self()},
     receive
@@ -32,7 +31,7 @@ acquire(Coord, Key, ComputeFun) ->
             Result
     end.
 
-%% Boucle du coordinateur.
+%% Coordinator loop.
 %% State :: #{Key => {computing, [pid()]} | {done, term()}}
 loop(State) ->
     receive

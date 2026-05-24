@@ -1,15 +1,15 @@
 -module(fenrir_confidence_monitor).
 -behaviour(gen_server).
 
-%% Collecte la confiance par enregistrement et par signature. Les enregistrements
-%% sous le seuil sont routés en dead-letter. Décide quand une escalade
-%% (ré-apprentissage) est nécessaire.
+%% Collects confidence per record and per signature. Records below the
+%% threshold are routed to dead-letters. Decides when an escalation
+%% (re-learning) is needed.
 
 -export([start_link/0, start_link/1, observe/3, mean/1, dead_letters/1,
          needs_escalation/1, reset/1]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 
-%% Sig -> {Count, SumConf, DeadLetters(list de lignes, ordre d'arrivée)}
+%% Sig -> {Count, SumConf, DeadLetters (list of lines, arrival order)}
 -record(state, {tab, min_conf, min_samples}).
 
 start_link() -> start_link(#{}).

@@ -4,8 +4,8 @@
 
 all() -> [improves_keeps_patch, regression_is_rejected, no_dead_letters_no_change].
 
-%% parse_line mocké : la recette "new" parse parfaitement (1.0), les autres
-%% mal (0.5). Permet de simuler une amélioration ou une régression.
+%% Mocked parse_line: the "new" recipe parses perfectly (1.0), the others
+%% poorly (0.5). Lets us simulate an improvement or a regression.
 nif(RelearnResult) ->
     #{
         parse_line => fun(Json, _Line) ->
@@ -30,7 +30,7 @@ improves_keeps_patch(_) ->
     true = (New > Old).
 
 regression_is_rejected(_) ->
-    %% Le ré-apprentissage ne change rien d'utile (toujours "old") → pas mieux.
+    %% Re-learning changes nothing useful (still "old") → no better.
     Nif = nif(<<"old">>),
     DL = [<<"Bob;notanumber">>, <<"Eve;n/a">>],
     {rejected, Recipe, Old, New} = fenrir_job:escalate(recipe(), DL, Nif),

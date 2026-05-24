@@ -11,8 +11,8 @@ init() ->
     SoName = filename:join([code:priv_dir(?APPNAME), ?LIBNAME]),
     erlang:load_nif(SoName, 0).
 
-%% Remplacés par le NIF au chargement ; ces clauses ne s'exécutent
-%% que si le NIF n'a pas pu être chargé.
+%% Replaced by the NIF on load; these clauses only run if the NIF could not
+%% be loaded.
 sniff(_Sample) -> erlang:nif_error(nif_not_loaded).
 parse_line(_RecipeJson, _Line) -> erlang:nif_error(nif_not_loaded).
 relearn(_PrevRecipeJson, _Corpus) -> erlang:nif_error(nif_not_loaded).

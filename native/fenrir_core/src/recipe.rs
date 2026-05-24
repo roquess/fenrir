@@ -9,8 +9,8 @@ pub struct Recipe {
     pub schema: Vec<Field>,
     #[serde(default)]
     pub confidence_rules: ConfidenceRules,
-    /// Échappatoire « code généré » : transformations par champ exécutées en
-    /// bac à sable après coercition. Vide par défaut.
+    /// "Generated code" escape hatch: per-field transforms run in a sandbox
+    /// after coercion. Empty by default.
     #[serde(default)]
     pub transforms: Vec<Transform>,
 }

@@ -24,9 +24,9 @@ routes_low_to_dead_letters(_) ->
     [<<"bad">>] = fenrir_confidence_monitor:dead_letters(<<"s">>).
 
 triggers_escalation(_) ->
-    %% Un seul échantillon : pas encore (min_samples = 2).
+    %% A single sample: not yet (min_samples = 2).
     ok = fenrir_confidence_monitor:observe(<<"s">>, <<"bad">>, 0.2),
     false = fenrir_confidence_monitor:needs_escalation(<<"s">>),
-    %% Deux échantillons sous le seuil → escalade.
+    %% Two samples below the threshold → escalation.
     ok = fenrir_confidence_monitor:observe(<<"s">>, <<"bad2">>, 0.2),
     true = fenrir_confidence_monitor:needs_escalation(<<"s">>).

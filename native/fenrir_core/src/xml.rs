@@ -4,9 +4,9 @@ use quick_xml::reader::Reader;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-/// Recette XML : un enregistrement = une occurrence de `record_tag`, ses
-/// champs = les éléments enfants directs. (Phase 3 : valeurs en String ;
-/// le typage XML pourra être ajouté plus tard.)
+/// XML recipe: one record = one occurrence of `record_tag`, its fields =
+/// the direct child elements. (Phase 3: values as String; XML typing can be
+/// added later.)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct XmlRecipe {
     pub signature: String,
@@ -16,7 +16,7 @@ pub struct XmlRecipe {
     pub fields: Vec<String>,
 }
 
-/// Détection grossière du format à partir d'un échantillon.
+/// Coarse format detection from a sample.
 pub fn detect_format(sample: &str) -> &'static str {
     if sample.trim_start().starts_with('<') {
         "xml"
@@ -33,7 +33,7 @@ fn local_name(raw: &[u8]) -> String {
     }
 }
 
-/// Infère la structure : l'élément répété (niveau 2) et ses champs enfants.
+/// Infers the structure: the repeated element (level 2) and its child fields.
 pub fn sniff_xml(sample: &str) -> XmlRecipe {
     let mut reader = Reader::from_str(sample);
     reader.config_mut().trim_text(true);
@@ -90,7 +90,7 @@ fn push_unique(v: &mut Vec<String>, name: String) {
     }
 }
 
-/// Parse un fragment d'un seul enregistrement (`<row>…</row>`) → Value.
+/// Parses a single-record fragment (`<row>…</row>`) → Value.
 pub fn parse_record_xml(recipe: &XmlRecipe, fragment: &str) -> ParsedRecord {
     let mut reader = Reader::from_str(fragment);
     reader.config_mut().trim_text(true);

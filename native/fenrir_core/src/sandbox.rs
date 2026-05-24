@@ -1,13 +1,13 @@
 use rhai::{Engine, Scope};
 
-/// Exécute un snippet de transformation généré, dans un bac à sable à ressources
-/// limitées. C'est l'échappatoire « code généré » : quand une transformation
-/// dépasse le vocabulaire déclaratif de la recette, l'IA peut émettre un petit
-/// snippet rhai pour CE champ. Le snippet reçoit `input` (la valeur brute du
-/// champ, en String) et doit renvoyer une String.
+/// Runs a generated transform snippet inside a resource-limited sandbox.
+/// This is the "generated code" escape hatch: when a transform exceeds the
+/// recipe's declarative vocabulary, the AI can emit a small rhai snippet for
+/// THIS field. The snippet receives `input` (the raw field value, as a String)
+/// and must return a String.
 ///
-/// Limites : nombre d'opérations et taille de chaîne plafonnés → un snippet qui
-/// s'emballe est interrompu plutôt que de bloquer le pipeline.
+/// Limits: operation count and string size are capped → a runaway snippet is
+/// interrupted rather than allowed to block the pipeline.
 pub fn run_snippet(code: &str, input: &str) -> Result<String, String> {
     let mut engine = Engine::new();
     engine.set_max_operations(10_000);
@@ -33,14 +33,14 @@ mod tests {
 
     #[test]
     fn can_reshape_value() {
-        // Normalise un préfixe téléphonique.
+        // Normalize a phone prefix.
         let code = r#"if input.starts_with("0") { "+33" + input.sub_string(1) } else { input }"#;
         assert_eq!(run_snippet(code, "0612345678").unwrap(), "+33612345678");
     }
 
     #[test]
     fn op_limit_stops_runaway_snippet() {
-        // Boucle infinie → interrompue par la limite d'opérations.
+        // Infinite loop → interrupted by the operation limit.
         let code = "let x = 0; while true { x += 1; } x.to_string()";
         assert!(run_snippet(code, "x").is_err());
     }

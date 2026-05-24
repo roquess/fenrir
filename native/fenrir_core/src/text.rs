@@ -3,9 +3,9 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-/// Recette texte / semi-structuré : un patron regex à groupes nommés. Chaque
-/// groupe nommé devient un champ. Cible les logs, relevés, lignes répétitives
-/// dont la structure n'est pas formelle (cf. famille loki_text).
+/// Text / semi-structured recipe: a regex pattern with named groups. Each
+/// named group becomes a field. Targets logs, statements, repetitive lines
+/// whose structure is not formal (cf. the loki_text family).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextRecipe {
     pub signature: String,
@@ -15,8 +15,8 @@ pub struct TextRecipe {
     pub fields: Vec<String>,
 }
 
-/// Construit une recette à partir d'un patron : les champs sont déduits des
-/// groupes de capture nommés du regex.
+/// Builds a recipe from a pattern: fields are derived from the regex's named
+/// capture groups.
 pub fn recipe_from_pattern(pattern: &str) -> TextRecipe {
     let fields = match Regex::new(pattern) {
         Ok(re) => re
@@ -36,8 +36,8 @@ pub fn recipe_from_pattern(pattern: &str) -> TextRecipe {
     }
 }
 
-/// Applique le patron à une ligne → Value, avec confiance = ratio de champs
-/// effectivement capturés.
+/// Applies the pattern to a line → Value, with confidence = ratio of fields
+/// actually captured.
 pub fn parse_text(recipe: &TextRecipe, line: &str) -> ParsedRecord {
     let re = match Regex::new(&recipe.pattern) {
         Ok(r) => r,

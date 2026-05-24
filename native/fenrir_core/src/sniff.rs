@@ -7,7 +7,7 @@ const QUOTE: char = '"';
 pub fn sniff(sample: &str) -> Recipe {
     let lines: Vec<&str> = sample.lines().filter(|l| !l.is_empty()).collect();
     let sep = detect_sep(&lines);
-    // Découpage cohérent avec l'engine (respecte les guillemets).
+    // Splitting consistent with the engine (quote-aware).
     let rows: Vec<Vec<String>> = lines.iter().map(|l| split_csv(l, sep, QUOTE)).collect();
     let ncols = rows.iter().map(|r| r.len()).max().unwrap_or(1);
     let header = detect_header(&rows);
@@ -56,12 +56,11 @@ pub fn sniff(sample: &str) -> Recipe {
     }
 }
 
-/// Ré-apprend une recette à partir d'un corpus enrichi (typiquement les
-/// échantillons d'origine + les enregistrements qui ont échoué). Conserve la
-/// signature de la source (même structure) mais ré-infère le schéma et
-/// incrémente la version. C'est le cœur de l'escalade : une colonne autrefois
-/// vue comme Int qui reçoit beaucoup de non-entiers devient String, ce qui
-/// remonte la confiance future.
+/// Re-learns a recipe from an enriched corpus (typically the original samples
+/// plus the records that failed). Keeps the source signature (same structure)
+/// but re-infers the schema and bumps the version. This is the heart of
+/// escalation: a column once seen as Int that receives many non-integers
+/// becomes String, which raises future confidence.
 pub fn relearn(prev: &Recipe, corpus: &str) -> Recipe {
     let mut r = sniff(corpus);
     r.signature = prev.signature.clone();
@@ -70,7 +69,7 @@ pub fn relearn(prev: &Recipe, corpus: &str) -> Recipe {
 }
 
 fn detect_sep(lines: &[&str]) -> char {
-    // Le séparateur dont le nombre d'occurrences est le plus constant entre lignes.
+    // The separator whose occurrence count is the most consistent across lines.
     let mut best = ',';
     let mut best_score = f64::INFINITY;
     for &cand in &CANDIDATE_SEPS {
@@ -82,7 +81,7 @@ fn detect_sep(lines: &[&str]) -> char {
         let mean = total as f64 / counts.len() as f64;
         let var =
             counts.iter().map(|&c| (c as f64 - mean).powi(2)).sum::<f64>() / counts.len() as f64;
-        // privilégie faible variance, pénalise séparateur jamais vu
+        // favor low variance, penalize a never-seen separator
         let score = var - mean * 0.001;
         if score < best_score {
             best_score = score;
@@ -96,8 +95,8 @@ fn detect_header(rows: &[Vec<String>]) -> bool {
     if rows.len() < 2 {
         return false;
     }
-    // Header probable si la 1re ligne n'a aucune cellule numérique alors que
-    // les suivantes en ont.
+    // Likely a header if the first line has no numeric cell while the
+    // following ones do.
     let first_numeric = rows[0].iter().any(|c| c.trim().parse::<f64>().is_ok());
     let rest_numeric = rows[1..]
         .iter()
@@ -105,8 +104,8 @@ fn detect_header(rows: &[Vec<String>]) -> bool {
     !first_numeric && rest_numeric
 }
 
-/// Seuil de tolérance : un type est retenu si au moins 70% des cellules
-/// non vides s'y conforment. Tolère les valeurs aberrantes du monde réel.
+/// Tolerance threshold: a type is accepted if at least 70% of the non-empty
+/// cells conform to it. Tolerates real-world outliers.
 const TYPE_THRESHOLD: f64 = 0.7;
 
 fn infer_type(data: &[Vec<String>], col: usize) -> FieldType {
@@ -174,10 +173,10 @@ mod tests {
 
     #[test]
     fn relearn_bumps_version_keeps_signature_and_widens_type() {
-        // Corpus initial : age tout entier → Int.
+        // Initial corpus: age all integers → Int.
         let r1 = sniff("name;age\nAlice;30\nBob;25\n");
         assert_eq!(r1.schema[1].ty, FieldType::Int);
-        // Corpus enrichi avec beaucoup de non-entiers → age devient String.
+        // Enriched corpus with many non-integers → age becomes String.
         let corpus = "name;age\nAlice;N/A\nBob;unknown\nCarol;n/a\nDan;42\n";
         let r2 = relearn(&r1, corpus);
         assert_eq!(r2.signature, r1.signature);

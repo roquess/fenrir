@@ -4,8 +4,8 @@
 -export([start_link/0, start_link/1, put/2, get/1, history/1, rollback/1]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 
-%% tab  : Sig -> Recipe courante
-%% hist : Sig -> [Recipe]  (plus récente en tête)
+%% tab  : Sig -> current Recipe
+%% hist : Sig -> [Recipe]  (most recent first)
 -record(state, {tab, hist, dir, disk = true}).
 
 start_link() -> start_link(#{dir => "priv/recipes"}).

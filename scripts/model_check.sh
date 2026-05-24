@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Lance le model checking Concuerror sur les propriétés de concurrence de Fenrir.
-# Prérequis : Concuerror buildé dans ../Concuerror (escript + ebin).
+# Runs Concuerror model checking on Fenrir's concurrency properties.
+# Prerequisite: Concuerror built in ../Concuerror (escript + ebin).
 #
-# Usage : scripts/model_check.sh [test_function]
+# Usage: scripts/model_check.sh [test_function]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

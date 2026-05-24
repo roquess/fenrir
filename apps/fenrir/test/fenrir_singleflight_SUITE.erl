@@ -12,9 +12,9 @@ leader_computes_and_shares(_) ->
     Pids = [spawn(fun() -> Self ! {r, fenrir_singleflight:acquire(Coord, Key, Compute)} end)
             || _ <- lists:seq(1, 5)],
     Results = [receive {r, V} -> V end || _ <- Pids],
-    %% Les 5 obtiennent la même valeur.
+    %% All 5 get the same value.
     [value42, value42, value42, value42, value42] = Results,
-    %% Une seule exécution du calcul.
+    %% A single execution of the computation.
     1 = count(computed, 0),
     fenrir_singleflight:stop(Coord).
 
@@ -24,7 +24,7 @@ done_serves_immediately(_) ->
     Key = <<"k">>,
     %% Premier acquire calcule et termine.
     value = fenrir_singleflight:acquire(Coord, Key, fun() -> Self ! computed, value end),
-    %% Second acquire (après done) est servi sans recalcul.
+    %% Second acquire (after done) is served without recomputation.
     value = fenrir_singleflight:acquire(Coord, Key, fun() -> Self ! computed, other end),
     1 = count(computed, 0),
     fenrir_singleflight:stop(Coord).

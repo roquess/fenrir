@@ -15,15 +15,15 @@ end_per_testcase(_, Config) ->
     [gen_server:stop(P) || P <- ?config(pids, Config)],
     ok.
 
-%% Un lot propre : confiance haute, aucune escalade.
+%% A clean batch: high confidence, no escalation.
 healthy_batch_no_escalation(_) ->
     Sample = <<"name;age\nAlice;30\nBob;25\n">>,
     Lines  = [<<"Carol;40">>, <<"Dan;22">>],
     Report = fenrir:ingest_adaptive(Sample, Lines),
     false = maps:get(escalated, Report).
 
-%% Un lot dégradé (la colonne age devient non numérique) : la confiance chute,
-%% Fenrir escalade, ré-apprend (age → String) et le patch améliore la confiance.
+%% A degraded batch (the age column becomes non-numeric): confidence drops,
+%% Fenrir escalates, re-learns (age → String), and the patch improves confidence.
 degraded_batch_escalates_and_improves(_) ->
     Sample = <<"name;age\nAlice;30\nBob;25\n">>,
     Lines  = [<<"Carol;N/A">>, <<"Dan;unknown">>, <<"Eve;n/a">>],
@@ -33,6 +33,6 @@ degraded_batch_escalates_and_improves(_) ->
     Old   = maps:get(old_conf, Report),
     New   = maps:get(new_conf, Report),
     true  = (New > Old),
-    %% La recette patchée est bien persistée (nouvelle version réutilisable).
+    %% The patched recipe is persisted (a new reusable version).
     Sig = maps:get(signature, Report),
     {ok, _} = fenrir_recipe_store:get(Sig).

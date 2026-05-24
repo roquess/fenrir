@@ -1,15 +1,15 @@
 -module(fenrir_drift_detector).
 -behaviour(gen_server).
 
-%% Détection de dérive de format. Maintient une fenêtre glissante des dernières
-%% confiances par signature. Quand la fenêtre est pleine et que sa moyenne passe
-%% sous le seuil, on considère que le format de la source a dérivé → il faut
-%% relancer l'apprentissage. C'est le mécanisme d'auto-réparation.
+%% Format drift detection. Keeps a sliding window of the latest confidences
+%% per signature. When the window is full and its mean drops below the
+%% threshold, the source format is considered to have drifted → learning must
+%% be re-triggered. This is the self-healing mechanism.
 
 -export([start_link/0, start_link/1, record/2, drifting/1, window/1, reset/1]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 
-%% Sig -> [Conf]  (les WindowSize dernières, plus récente en tête)
+%% Sig -> [Conf]  (the last WindowSize values, most recent first)
 -record(state, {tab, size, threshold}).
 
 start_link() -> start_link(#{}).

@@ -17,10 +17,10 @@ no_drift_when_healthy(_) ->
     false = fenrir_drift_detector:drifting(<<"s">>).
 
 drift_when_window_degrades(_) ->
-    %% Fenêtre pas encore pleine : pas de verdict.
+    %% Window not full yet: no verdict.
     ok = fenrir_drift_detector:record(<<"s">>, 0.2),
     false = fenrir_drift_detector:drifting(<<"s">>),
-    %% Fenêtre pleine et moyenne basse → dérive.
+    %% Window full and mean low → drift.
     ok = fenrir_drift_detector:record(<<"s">>, 0.3),
     ok = fenrir_drift_detector:record(<<"s">>, 0.1),
     true = fenrir_drift_detector:drifting(<<"s">>).
