@@ -1,5 +1,5 @@
 -module(fenrir_core_nif).
--export([sniff/1, parse_line/2, load/2]).
+-export([sniff/1, parse_line/2, relearn/2, load/2]).
 -on_load(init/0).
 
 -define(APPNAME, fenrir).
@@ -13,4 +13,5 @@ init() ->
 %% que si le NIF n'a pas pu être chargé.
 sniff(_Sample) -> erlang:nif_error(nif_not_loaded).
 parse_line(_RecipeJson, _Line) -> erlang:nif_error(nif_not_loaded).
+relearn(_PrevRecipeJson, _Corpus) -> erlang:nif_error(nif_not_loaded).
 load(_ValueJson, _Format) -> erlang:nif_error(nif_not_loaded).

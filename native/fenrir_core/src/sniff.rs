@@ -55,6 +55,19 @@ pub fn sniff(sample: &str) -> Recipe {
     }
 }
 
+/// Ré-apprend une recette à partir d'un corpus enrichi (typiquement les
+/// échantillons d'origine + les enregistrements qui ont échoué). Conserve la
+/// signature de la source (même structure) mais ré-infère le schéma et
+/// incrémente la version. C'est le cœur de l'escalade : une colonne autrefois
+/// vue comme Int qui reçoit beaucoup de non-entiers devient String, ce qui
+/// remonte la confiance future.
+pub fn relearn(prev: &Recipe, corpus: &str) -> Recipe {
+    let mut r = sniff(corpus);
+    r.signature = prev.signature.clone();
+    r.version = prev.version + 1;
+    r
+}
+
 fn detect_sep(lines: &[&str]) -> char {
     // Le séparateur dont le nombre d'occurrences est le plus constant entre lignes.
     let mut best = ',';
@@ -156,5 +169,18 @@ mod tests {
     fn signature_is_stable() {
         let s = "a;b\n1;2\n";
         assert_eq!(sniff(s).signature, sniff(s).signature);
+    }
+
+    #[test]
+    fn relearn_bumps_version_keeps_signature_and_widens_type() {
+        // Corpus initial : age tout entier → Int.
+        let r1 = sniff("name;age\nAlice;30\nBob;25\n");
+        assert_eq!(r1.schema[1].ty, FieldType::Int);
+        // Corpus enrichi avec beaucoup de non-entiers → age devient String.
+        let corpus = "name;age\nAlice;N/A\nBob;unknown\nCarol;n/a\nDan;42\n";
+        let r2 = relearn(&r1, corpus);
+        assert_eq!(r2.signature, r1.signature);
+        assert_eq!(r2.version, r1.version + 1);
+        assert_eq!(r2.schema[1].ty, FieldType::String);
     }
 }
