@@ -1,5 +1,6 @@
 /_build/
 /native/*/target/
+/docs/
 *.beam
 erl_crash.dump
 rebar3.crashdump
