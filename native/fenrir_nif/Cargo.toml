@@ -1,0 +1,13 @@
+[package]
+name = "fenrir_nif"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "fenrir_nif"
+crate-type = ["cdylib"]
+
+[dependencies]
+rustler = "0.34"
+serde_json = "1"
+fenrir_core = { path = "../fenrir_core" }
