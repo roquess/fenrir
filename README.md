@@ -26,6 +26,58 @@ réutilisable.
 Fenrir transforme ce travail en un **état émergent de l'usage** : il observe,
 infère une recette, la persiste, et ne réapprend que si nécessaire.
 
+## Vision complète
+
+À terme, Fenrir est un **moteur ETL/ELT qui se répare tout seul**. On lui pointe
+une source — quelconque, inconnue, qui dérive avec le temps — et il s'en débrouille :
+
+```
+          ┌──────────────────────────────────────────────────────────┐
+          │                      SOURCE INCONNUE                       │
+          │         CSV · XML · logs · texte · PDF · …                 │
+          └────────────────────────────┬─────────────────────────────┘
+                                        ▼
+   ┌───────────  PERCEIVE  ─────────────────────────────────────────────┐
+   │  échantillonne · calcule une signature de structure                │
+   └────────────────────────────┬───────────────────────────────────────┘
+                                 ▼
+   ┌───────────  SUGGEST  ──────────────────────────────────────────────┐
+   │  recette connue ?                                                   │
+   │    ├─ oui → réutilise (ZÉRO apprentissage)                          │
+   │    └─ non → induit une recette (single-flight : 1 seul leader)      │
+   └────────────────────────────┬───────────────────────────────────────┘
+                                 ▼
+   ┌───────────  ACT  ──────────────────────────────────────────────────┐
+   │  applique la recette à grande échelle → serde_json::Value           │
+   │    ├─ confiance haute  → loki_weave (ZÉRO IA)                        │
+   │    └─ confiance basse  → dead-letter ──► ESCALADE                    │
+   └────────────────────────────┬───────────────────────────────────────┘
+                                 ▼
+   ┌───────────  REMEMBER  ─────────────────────────────────────────────┐
+   │  persiste la recette versionnée · suit la confiance dans le temps   │
+   │    └─ dérive de format détectée → relance l'apprentissage           │
+   │    └─ régression après patch → rollback de version                  │
+   └─────────────────────────────────────────────────────────────────────┘
+```
+
+Les propriétés qui font la valeur du système :
+
+- **Auto-apprentissage** — aucune écriture de connecteur à la main ; la recette
+  est inférée puis raffinée.
+- **Déterministe et auditable** — l'exécution n'utilise jamais l'IA ; la recette
+  est un artefact JSON lisible, éditable, versionné dans git.
+- **Auto-réparation** — quand le format dérive, la confiance chute, Fenrir
+  ré-apprend ; un patch qui régresse est annulé (rollback).
+- **Économe** — single-flight + cache de recettes : l'apprentissage coûteux ne
+  tourne qu'une fois par signature, même sous charge concurrente.
+- **Sûr par défaut** — les transformations complexes que la recette déclarative
+  ne peut exprimer s'exécutent dans un bac à sable à ressources limitées.
+
+> **Où en est-on ?** La Phase 1 (le squelette déterministe : perceive → suggest →
+> act → remember, single-flight model-checké, pipeline CSV bout-en-bout) est
+> livrée. Les Phases 2-4 ajoutent l'escalade, la détection de dérive, les backends
+> XML/texte/PDF et le bac à sable. Voir la [feuille de route](#feuille-de-route).
+
 ## Principe directeur
 
 L'IA (l'apprentissage) est un **service séparable**, utilisé uniquement en
