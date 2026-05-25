@@ -78,10 +78,12 @@ The properties that make the system valuable:
   (generative proptests) and an adversarial corpus (empty, BOM, huge field,
   ragged rows, ambiguous separators, multibyte); the NIF boundary degrades to
   `{error, _}` on corrupted input rather than crashing a run.
-- **Parallel streaming** — `fenrir_stream` parses across a worker pool with
-  demand-driven backpressure (bounded memory) and at-least-once fault tolerance;
-  per-record confidence still feeds the healer. Single-node now, multi-node by
-  design (pid-based demand protocol).
+- **Parallel & distributed streaming** — `fenrir_stream` parses across a worker
+  pool with demand-driven backpressure (bounded memory) and at-least-once fault
+  tolerance; per-record confidence still feeds the healer. Workers are pure
+  parsers (side effects run on the coordinator), so the pool spans multiple
+  Erlang nodes via `run(.., #{nodes => [n1, n2, ..]})`; a dead node's batch is
+  re-queued on a live one (`nodes_used` reports where work ran).
 
 > **Where are we?** All four phases are delivered: the deterministic loop
 > (perceive → suggest → act → remember, model-checked single-flight), escalation
@@ -281,7 +283,7 @@ fenrir/
 │   │   ├── fenrir_learner_gateway.erl  # injectable learning (heuristic / AI)
 │   │   ├── fenrir_singleflight.erl     # concurrent cold-start dedup
 │   │   ├── fenrir_stream.erl           # demand-driven parallel coordinator
-│   │   ├── fenrir_stream_worker.erl    # streaming parse worker
+│   │   ├── fenrir_stream_worker.erl    # pure parse worker (node-portable)
 │   │   ├── fenrir_writer.erl           # serializing JSONL writer sink
 │   │   ├── fenrir_cli.erl              # ingest CLI (bin/fenrir)
 │   │   ├── fenrir_metrics.erl          # counters + live snapshot

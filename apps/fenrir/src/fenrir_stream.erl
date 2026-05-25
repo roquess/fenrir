@@ -57,6 +57,7 @@ writer_sink(Path, Format) ->
 %% ---- coordinator ----
 
 -record(st, {source, recipe_json, sig, nif, sink, batch_size, pool_size,
+             nodes = [node()], worker_node = #{}, nodes_used = [],
              pending = [], outstanding = #{}, refs = #{}, idle = [],
              source_done = false, processed = 0, caller, started}).
 
@@ -80,17 +81,22 @@ init(#{source := Source, recipe := Recipe, sink := Sink, opts := Opts, caller :=
     PoolSize = maps:get(pool_size, Opts, erlang:system_info(schedulers)),
     BatchSize = maps:get(batch_size, Opts, 100),
     Nif = maps:get(nif, Opts, fenrir:nif()),
+    Nodes = maps:get(nodes, Opts, [node()]),
     St0 = #st{source = Source,
               recipe_json = maps:get(<<"json">>, Recipe),
               sig = maps:get(<<"signature">>, Recipe),
               nif = Nif, sink = Sink,
               batch_size = BatchSize, pool_size = PoolSize,
-              caller = Caller,
+              nodes = Nodes, caller = Caller,
               started = erlang:monotonic_time(millisecond)},
     %% Drop leading records (e.g. a CSV header) before workers start.
     StSkipped = drain(St0, maps:get(skip, Opts, 0)),
-    St = lists:foldl(fun(_, Acc) -> spawn_worker(Acc) end, StSkipped,
-                     lists:seq(1, PoolSize)),
+    %% Spawn the pool round-robin across the configured nodes.
+    St = lists:foldl(
+           fun(I, Acc) ->
+               Node = lists:nth((I rem length(Nodes)) + 1, Nodes),
+               spawn_worker(Acc, Node)
+           end, StSkipped, lists:seq(0, PoolSize - 1)),
     {ok, St}.
 
 drain(St, 0) ->
@@ -104,22 +110,42 @@ drain(#st{source = Src} = St, N) when N > 0 ->
 handle_call(_, _, S) -> {reply, ok, S}.
 handle_cast(_, S) -> {noreply, S}.
 
-handle_info({demand, W, AckK}, St0) ->
-    St1 = St0#st{processed = St0#st.processed + AckK,
-                 outstanding = maps:remove(W, St0#st.outstanding),
-                 idle = [W | lists:delete(W, St0#st.idle)]},
-    serve(St1);
+handle_info({demand, W, Results}, St0) ->
+    Lines = maps:get(W, St0#st.outstanding, []),
+    St1 = apply_results(St0, Lines, Results),
+    St2 = St1#st{outstanding = maps:remove(W, St1#st.outstanding),
+                 idle = [W | lists:delete(W, St1#st.idle)]},
+    serve(St2);
 handle_info({'DOWN', _Ref, process, W, _Reason}, St0) ->
     Requeued = maps:get(W, St0#st.outstanding, []),
     St1 = St0#st{pending = Requeued ++ St0#st.pending,
                  outstanding = maps:remove(W, St0#st.outstanding),
                  refs = maps:remove(W, St0#st.refs),
+                 worker_node = maps:remove(W, St0#st.worker_node),
                  idle = lists:delete(W, St0#st.idle)},
     St2 = maybe_respawn(St1),
     serve(St2);
 handle_info(_, S) -> {noreply, S}.
 
 terminate(_, _) -> ok.
+
+%% Apply a finished batch's results: side effects (confidence/drift/sink) run
+%% here, on the coordinator node — workers are pure parsers.
+apply_results(St, Lines, Results) when length(Lines) =:= length(Results) ->
+    Sig = St#st.sig,
+    Sink = St#st.sink,
+    lists:foldl(
+      fun({Line, {Value, Conf}}, Acc) ->
+          catch fenrir_confidence_monitor:observe(Sig, Line, Conf),
+          catch fenrir_drift_detector:record(Sig, Conf),
+          try Sink(Value, Conf)
+          catch C:R -> logger:warning("fenrir_stream: sink failed ~p:~p", [C, R])
+          end,
+          Acc#st{processed = Acc#st.processed + 1}
+      end, St, lists:zip(Lines, Results));
+apply_results(St, _Lines, _Results) ->
+    %% First demand (both empty), or an unexpected mismatch: nothing to apply.
+    St.
 
 %% Hand work to idle workers until none are idle or no work is available;
 %% finalize when the run is complete.
@@ -150,7 +176,8 @@ finalize(St) ->
     Tput = round(St#st.processed * 1000 / max(Elapsed, 1)),
     Report = #{processed => St#st.processed,
                elapsed_ms => Elapsed,
-               throughput_per_s => Tput},
+               throughput_per_s => Tput,
+               nodes_used => St#st.nodes_used},
     St#st.caller ! {fenrir_stream_done, Report},
     {stop, normal, St}.
 
@@ -172,11 +199,20 @@ pull_batch(#st{pending = [], source_done = false, source = Src} = St, N, Acc) ->
 maybe_respawn(St) ->
     case complete(St) of
         true  -> St;
-        false -> spawn_worker(St)
+        false -> spawn_worker(St, pick_live_node(St#st.nodes))
     end.
 
-spawn_worker(St) ->
-    {Pid, Ref} = spawn_monitor(
-                   fenrir_stream_worker, run,
-                   [self(), St#st.recipe_json, St#st.sig, St#st.nif, St#st.sink]),
-    St#st{refs = maps:put(Pid, Ref, St#st.refs)}.
+%% A node is live if it is the local node or a currently-connected remote node.
+pick_live_node(Nodes) ->
+    Live = [N || N <- Nodes, N =:= node() orelse lists:member(N, nodes())],
+    case Live of
+        []         -> node();
+        [Head | _] -> Head
+    end.
+
+spawn_worker(St, Node) ->
+    {Pid, Ref} = spawn_monitor(Node, fenrir_stream_worker, run,
+                               [self(), St#st.recipe_json, St#st.nif]),
+    St#st{refs = maps:put(Pid, Ref, St#st.refs),
+          worker_node = maps:put(Pid, Node, St#st.worker_node),
+          nodes_used = ordsets:add_element(Node, St#st.nodes_used)}.

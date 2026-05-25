@@ -29,7 +29,9 @@ jobs:
         run: cd native/fenrir_core && cargo test
 
       - name: Common Test
-        run: rebar3 ct
+        run: |
+          epmd -daemon || true   # enable distribution so the multi-node suite runs
+          rebar3 ct
 
       - name: Build Concuerror
         run: |

@@ -1,7 +1,7 @@
 -module(fenrir_stream_SUITE).
 -export([all/0, init_per_testcase/2, end_per_testcase/2]).
 -export([list_source_yields_then_eof/1, file_source_reads_lines/1,
-         worker_parses_sinks_and_acks/1, processes_all_records_unordered/1,
+         worker_parses_and_returns_results/1, processes_all_records_unordered/1,
          source_is_pulled_lazily/1, worker_crash_record_still_processed/1,
          confidence_is_observed/1, report_has_throughput/1,
          file_source_strips_bom/1]).
@@ -9,7 +9,7 @@
 
 all() ->
     [list_source_yields_then_eof, file_source_reads_lines,
-     worker_parses_sinks_and_acks, processes_all_records_unordered,
+     worker_parses_and_returns_results, processes_all_records_unordered,
      source_is_pulled_lazily, worker_crash_record_still_processed,
      confidence_is_observed, report_has_throughput, file_source_strips_bom].
 
@@ -61,19 +61,18 @@ file_source_reads_lines(Config) ->
     {ok, <<"l2">>} = Src(),
     eof = Src().
 
-worker_parses_sinks_and_acks(_) ->
-    Self = self(),
-    Sink = fun(V, _C) -> Self ! {sunk, V}, ok end,
+worker_parses_and_returns_results(_) ->
     Coord = self(),
     W = spawn(fun() ->
-                  fenrir_stream_worker:run(Coord, <<"recipe">>, <<"sig">>,
-                                           mock_nif(), Sink)
+                  fenrir_stream_worker:run(Coord, <<"recipe">>, mock_nif())
               end),
-    receive {demand, W, 0} -> ok after 1000 -> ct:fail(no_first_demand) end,
+    receive {demand, W, []} -> ok after 1000 -> ct:fail(no_first_demand) end,
     W ! {batch, [<<"x">>, <<"y">>]},
-    receive {sunk, <<"{\"v\":\"x\"}">>} -> ok after 1000 -> ct:fail(no_sink_x) end,
-    receive {sunk, <<"{\"v\":\"y\"}">>} -> ok after 1000 -> ct:fail(no_sink_y) end,
-    receive {demand, W, 2} -> ok after 1000 -> ct:fail(no_ack) end,
+    receive
+        {demand, W, Results} ->
+            [{<<"{\"v\":\"x\"}">>, 1.0}, {<<"{\"v\":\"y\"}">>, 1.0}] = Results
+    after 1000 -> ct:fail(no_results)
+    end,
     W ! done.
 
 processes_all_records_unordered(_) ->
@@ -119,16 +118,19 @@ drain_sunk() ->
 worker_crash_record_still_processed(_) ->
     Self = self(),
     Flag = atomics:new(1, [{signed, false}]),
-    Sink = fun(V, _C) ->
-               case atomics:add_get(Flag, 1, 1) of
-                   1 -> exit(self(), kill);
-                   _ -> Self ! {rec, V}, ok
-               end
-           end,
+    %% The crash now happens inside the worker (parse_line), since the sink runs
+    %% on the coordinator. First parse hard-kills the worker; later parses succeed.
+    Nif = #{parse_line => fun(_RJ, R) ->
+                              case atomics:add_get(Flag, 1, 1) of
+                                  1 -> exit(self(), kill);
+                                  _ -> {<<"{\"v\":\"", R/binary, "\"}">>, 1.0}
+                              end
+                          end},
+    Sink = fun(V, _C) -> Self ! {rec, V}, ok end,
     Records = [<<"a">>, <<"b">>, <<"c">>],
     Src = fenrir_stream:list_source(Records),
     Report = fenrir_stream:run(Src, recipe(), Sink,
-                               #{pool_size => 1, batch_size => 3, nif => mock_nif()}),
+                               #{pool_size => 1, batch_size => 3, nif => Nif}),
     Got = drain_recs([]),
     true = lists:member(<<"{\"v\":\"a\"}">>, Got),
     true = lists:member(<<"{\"v\":\"b\"}">>, Got),
