@@ -37,4 +37,4 @@ jobs:
           (cd "$HOME/Concuerror" && rebar3 escriptize)
 
       - name: Model checks
-        run: CONCUERROR_DIR="$HOME/Concuerror" scripts/model_check_all.sh
+        run: CONCUERROR_DIR="$HOME/Concuerror" bash scripts/model_check_all.sh

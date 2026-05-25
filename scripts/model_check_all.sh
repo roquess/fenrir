@@ -17,7 +17,7 @@ PROPS=(
 fail=0
 for p in "${PROPS[@]}"; do
   printf '%-32s ' "$p"
-  out="$("$ROOT/scripts/model_check.sh" "$p" 2>&1 | grep -iE 'Summary' | tail -1)"
+  out="$(bash "$ROOT/scripts/model_check.sh" "$p" 2>&1 | grep -iE 'Summary' | tail -1)"
   echo "$out"
   echo "$out" | grep -q '0 errors' || fail=1
 done
