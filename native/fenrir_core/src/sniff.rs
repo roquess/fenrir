@@ -5,6 +5,7 @@ const CANDIDATE_SEPS: [char; 4] = [',', ';', '\t', '|'];
 const QUOTE: char = '"';
 
 pub fn sniff(sample: &str) -> Recipe {
+    let sample = sample.strip_prefix('\u{FEFF}').unwrap_or(sample);
     let lines: Vec<&str> = sample.lines().filter(|l| !l.is_empty()).collect();
     let sep = detect_sep(&lines);
     // Splitting consistent with the engine (quote-aware).

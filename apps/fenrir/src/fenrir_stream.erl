@@ -25,10 +25,14 @@ file_source(Path) ->
     {ok, Dev} = file:open(Path, [read, binary, {read_ahead, 65536}]),
     fun() ->
         case file:read_line(Dev) of
-            {ok, Line} -> {ok, strip_nl(Line)};
+            {ok, Line} -> {ok, strip_bom(strip_nl(Line))};
             eof -> file:close(Dev), eof
         end
     end.
+
+%% Strip a leading UTF-8 BOM (only the first line carries it; harmless on others).
+strip_bom(<<239, 187, 191, Rest/binary>>) -> Rest;
+strip_bom(Bin) -> Bin.
 
 strip_nl(Bin) ->
     S1 = case binary:last(Bin) of

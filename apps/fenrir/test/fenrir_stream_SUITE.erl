@@ -3,14 +3,15 @@
 -export([list_source_yields_then_eof/1, file_source_reads_lines/1,
          worker_parses_sinks_and_acks/1, processes_all_records_unordered/1,
          source_is_pulled_lazily/1, worker_crash_record_still_processed/1,
-         confidence_is_observed/1, report_has_throughput/1]).
+         confidence_is_observed/1, report_has_throughput/1,
+         file_source_strips_bom/1]).
 -include_lib("common_test/include/ct.hrl").
 
 all() ->
     [list_source_yields_then_eof, file_source_reads_lines,
      worker_parses_sinks_and_acks, processes_all_records_unordered,
      source_is_pulled_lazily, worker_crash_record_still_processed,
-     confidence_is_observed, report_has_throughput].
+     confidence_is_observed, report_has_throughput, file_source_strips_bom].
 
 init_per_testcase(_, Config) ->
     catch gen_server:stop(fenrir_confidence_monitor),
@@ -133,6 +134,13 @@ worker_crash_record_still_processed(_) ->
     true = lists:member(<<"{\"v\":\"b\"}">>, Got),
     true = lists:member(<<"{\"v\":\"c\"}">>, Got),
     true = maps:get(processed, Report) >= 2.
+
+file_source_strips_bom(Config) ->
+    Path = filename:join(?config(priv_dir, Config), "bom.csv"),
+    ok = file:write_file(Path, <<239, 187, 191, "name;age\n", "Alice;30\n">>),
+    Src = fenrir_stream:file_source(Path),
+    {ok, First} = Src(),
+    <<"name;age">> = First.
 
 report_has_throughput(_) ->
     Nif = #{parse_line => fun(_RJ, R) -> {<<"{\"v\":\"", R/binary, "\"}">>, 1.0} end},

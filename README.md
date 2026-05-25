@@ -74,6 +74,10 @@ The properties that make the system valuable:
   run in a resource-limited sandbox.
 - **Multi-format** — CSV (with dialect detection), XML (repeated element +
   fields), text/semi-structured (named-capture regex pattern, e.g. logs).
+- **Hardened** — the Rust core is proven panic-free over arbitrary input
+  (generative proptests) and an adversarial corpus (empty, BOM, huge field,
+  ragged rows, ambiguous separators, multibyte); the NIF boundary degrades to
+  `{error, _}` on corrupted input rather than crashing a run.
 - **Parallel streaming** — `fenrir_stream` parses across a worker pool with
   demand-driven backpressure (bounded memory) and at-least-once fault tolerance;
   per-record confidence still feeds the healer. Single-node now, multi-node by
