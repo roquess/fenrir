@@ -53,9 +53,23 @@ do_ingest(Input, #{to := Format, out := Out, sample := SampleN}) ->
                            end,
                     Report = fenrir_stream:run(Src, Recipe, Sink, #{skip => Skip}),
                     Written = Await(),
-                    {ok, Report#{written => Written, output => list_to_binary(Out)}}
+                    Sig = maps:get(<<"signature">>, Recipe),
+                    Mean = (catch fenrir_confidence_monitor:mean(Sig)),
+                    Drift = (catch fenrir_drift_detector:drifting(Sig)),
+                    Totals = case catch fenrir_metrics:snapshot() of
+                                 #{totals := T} -> T;
+                                 _ -> #{}
+                             end,
+                    {ok, Report#{written => Written,
+                                 output => list_to_binary(Out),
+                                 mean_confidence => normalize_float(Mean),
+                                 drifting => (Drift =:= true),
+                                 totals => Totals}}
             end
     end.
+
+normalize_float(F) when is_float(F) -> F;
+normalize_float(_) -> 1.0.
 
 %% Probe loki_weave with a trivial value to validate the target format.
 valid_format(Format) ->

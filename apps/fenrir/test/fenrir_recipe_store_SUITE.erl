@@ -1,11 +1,13 @@
 -module(fenrir_recipe_store_SUITE).
 -export([all/0, init_per_testcase/2, end_per_testcase/2]).
 -export([put_then_get/1, miss_returns_not_found/1, versioning_keeps_history/1,
-         rollback_reverts_to_previous/1, rollback_without_history_errors/1]).
+         rollback_reverts_to_previous/1, rollback_without_history_errors/1,
+         signatures_lists_known_keys/1]).
 -include_lib("common_test/include/ct.hrl").
 
 all() -> [put_then_get, miss_returns_not_found, versioning_keeps_history,
-          rollback_reverts_to_previous, rollback_without_history_errors].
+          rollback_reverts_to_previous, rollback_without_history_errors,
+          signatures_lists_known_keys].
 
 init_per_testcase(_, Config) ->
     {ok, Pid} = fenrir_recipe_store:start_link(#{dir => ?config(priv_dir, Config)}),
@@ -39,3 +41,8 @@ rollback_reverts_to_previous(_) ->
 rollback_without_history_errors(_) ->
     ok = fenrir_recipe_store:put(<<"single">>, #{<<"version">> => 1}),
     {error, no_previous} = fenrir_recipe_store:rollback(<<"single">>).
+
+signatures_lists_known_keys(_) ->
+    ok = fenrir_recipe_store:put(<<"a">>, #{<<"version">> => 1}),
+    ok = fenrir_recipe_store:put(<<"b">>, #{<<"version">> => 1}),
+    [<<"a">>, <<"b">>] = lists:sort(fenrir_recipe_store:signatures()).

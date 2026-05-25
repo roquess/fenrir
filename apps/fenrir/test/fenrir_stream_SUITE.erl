@@ -3,14 +3,14 @@
 -export([list_source_yields_then_eof/1, file_source_reads_lines/1,
          worker_parses_sinks_and_acks/1, processes_all_records_unordered/1,
          source_is_pulled_lazily/1, worker_crash_record_still_processed/1,
-         confidence_is_observed/1]).
+         confidence_is_observed/1, report_has_throughput/1]).
 -include_lib("common_test/include/ct.hrl").
 
 all() ->
     [list_source_yields_then_eof, file_source_reads_lines,
      worker_parses_sinks_and_acks, processes_all_records_unordered,
      source_is_pulled_lazily, worker_crash_record_still_processed,
-     confidence_is_observed].
+     confidence_is_observed, report_has_throughput].
 
 init_per_testcase(_, Config) ->
     catch gen_server:stop(fenrir_confidence_monitor),
@@ -133,6 +133,16 @@ worker_crash_record_still_processed(_) ->
     true = lists:member(<<"{\"v\":\"b\"}">>, Got),
     true = lists:member(<<"{\"v\":\"c\"}">>, Got),
     true = maps:get(processed, Report) >= 2.
+
+report_has_throughput(_) ->
+    Nif = #{parse_line => fun(_RJ, R) -> {<<"{\"v\":\"", R/binary, "\"}">>, 1.0} end},
+    Src = fenrir_stream:list_source([<<"a">>, <<"b">>, <<"c">>]),
+    Report = fenrir_stream:run(Src, recipe(), fun(_V, _C) -> ok end,
+                               #{pool_size => 2, batch_size => 2, nif => Nif}),
+    3 = maps:get(processed, Report),
+    true = is_integer(maps:get(elapsed_ms, Report)),
+    true = maps:get(elapsed_ms, Report) >= 0,
+    true = is_integer(maps:get(throughput_per_s, Report)).
 
 confidence_is_observed(_) ->
     Sink = fun(_V, _C) -> ok end,

@@ -54,11 +54,12 @@ writer_sink(Path, Format) ->
 
 -record(st, {source, recipe_json, sig, nif, sink, batch_size, pool_size,
              pending = [], outstanding = #{}, refs = #{}, idle = [],
-             source_done = false, processed = 0, caller}).
+             source_done = false, processed = 0, caller, started}).
 
 %% Synchronous run: blocks until the source is exhausted and all in-flight
 %% batches are done, then returns #{processed => N}.
 run(Source, Recipe, Sink, Opts) ->
+    fenrir_metrics:incr(runs),
     Args = #{source => Source, recipe => Recipe, sink => Sink,
              opts => Opts, caller => self()},
     {ok, Pid} = gen_server:start(?MODULE, Args, []),
@@ -80,7 +81,8 @@ init(#{source := Source, recipe := Recipe, sink := Sink, opts := Opts, caller :=
               sig = maps:get(<<"signature">>, Recipe),
               nif = Nif, sink = Sink,
               batch_size = BatchSize, pool_size = PoolSize,
-              caller = Caller},
+              caller = Caller,
+              started = erlang:monotonic_time(millisecond)},
     %% Drop leading records (e.g. a CSV header) before workers start.
     StSkipped = drain(St0, maps:get(skip, Opts, 0)),
     St = lists:foldl(fun(_, Acc) -> spawn_worker(Acc) end, StSkipped,
@@ -140,7 +142,12 @@ complete(St) ->
 
 finalize(St) ->
     [W ! done || W <- St#st.idle],
-    St#st.caller ! {fenrir_stream_done, #{processed => St#st.processed}},
+    Elapsed = erlang:monotonic_time(millisecond) - St#st.started,
+    Tput = round(St#st.processed * 1000 / max(Elapsed, 1)),
+    Report = #{processed => St#st.processed,
+               elapsed_ms => Elapsed,
+               throughput_per_s => Tput},
+    St#st.caller ! {fenrir_stream_done, Report},
     {stop, normal, St}.
 
 %% Pull up to batch_size records: pending first, then the source.

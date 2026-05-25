@@ -37,7 +37,7 @@ handle_call({record, Sig, Conf}, _From, S) ->
     ets:insert(S#state.tab, {Sig, Win2}),
     NowDrifting = is_drift(Win2, S),
     case (not WasDrifting) andalso NowDrifting of
-        true  -> notify(S#state.notify, {drift, Sig});
+        true  -> fenrir_metrics:incr(drifts), notify(S#state.notify, {drift, Sig});
         false -> ok
     end,
     {reply, ok, S};

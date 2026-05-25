@@ -1,7 +1,7 @@
 -module(fenrir_recipe_store).
 -behaviour(gen_server).
 
--export([start_link/0, start_link/1, put/2, get/1, history/1, rollback/1]).
+-export([start_link/0, start_link/1, put/2, get/1, history/1, rollback/1, signatures/0]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 -export([rollback_history/1]).
 
@@ -17,6 +17,7 @@ put(Sig, Recipe) -> gen_server:call(?MODULE, {put, Sig, Recipe}).
 get(Sig)         -> gen_server:call(?MODULE, {get, Sig}).
 history(Sig)     -> gen_server:call(?MODULE, {history, Sig}).
 rollback(Sig)    -> gen_server:call(?MODULE, {rollback, Sig}).
+signatures()     -> gen_server:call(?MODULE, signatures).
 
 init(Opts) ->
     Dir  = maps:get(dir, Opts, "priv/recipes"),
@@ -41,6 +42,9 @@ handle_call({get, Sig}, _From, S) ->
         [{Sig, R}] -> {reply, {ok, R}, S};
         []         -> {reply, not_found, S}
     end;
+
+handle_call(signatures, _From, S) ->
+    {reply, [Sig || {Sig, _} <- ets:tab2list(S#state.tab)], S};
 
 handle_call({history, Sig}, _From, S) ->
     case ets:lookup(S#state.hist, Sig) of

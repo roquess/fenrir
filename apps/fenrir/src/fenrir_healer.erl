@@ -79,8 +79,10 @@ do_heal(Sig, S) ->
             S1 = set_status(Sig, healing, S),
             try attempt_heal(Sig, S1#state.nif) of
                 healed ->
+                    fenrir_metrics:incr(heals),
                     {healed, set_status(Sig, healed, S1)};
                 quarantined ->
+                    fenrir_metrics:incr(quarantines),
                     notify(S1#state.notify, {needs_attention, Sig}),
                     logger:warning("fenrir_healer: ~p quarantined", [Sig]),
                     {quarantined, set_status(Sig, quarantined, S1)};

@@ -197,6 +197,15 @@ bin/fenrir ingest data.csv --to json -o out.jsonl --sample 50
 Output is JSONL (one JSON object per line) — the streaming-native format. A
 runnable example: `bash examples/run.sh`.
 
+## Observability
+
+`fenrir_metrics:snapshot/0` returns cumulative `totals` (heals, quarantines,
+drifts, runs), `uptime_ms`, and live per-signature state (mean confidence,
+dead-letter count, healer status, version = number of times learned/patched).
+The run/CLI report carries `elapsed_ms`, `throughput_per_s`, `mean_confidence`,
+and `drifting`. Counters are pushed fire-and-forget (a no-op when metrics isn't
+running); live state is pulled on demand. Zero dependencies.
+
 ## Usage (library)
 
 ```erlang
@@ -271,6 +280,7 @@ fenrir/
 │   │   ├── fenrir_stream_worker.erl    # streaming parse worker
 │   │   ├── fenrir_writer.erl           # serializing JSONL writer sink
 │   │   ├── fenrir_cli.erl              # ingest CLI (bin/fenrir)
+│   │   ├── fenrir_metrics.erl          # counters + live snapshot
 │   │   ├── fenrir_core_nif.erl         # NIF facade
 │   │   └── fenrir_{app,sup,job_sup}.erl
 │   └── test/                           # Common Test + Concuerror entry point

@@ -7,6 +7,9 @@ start_link() ->
 
 init([]) ->
     SupFlags = #{strategy => one_for_one, intensity => 5, period => 10},
+    Metrics = #{id => fenrir_metrics,
+                start => {fenrir_metrics, start_link, []},
+                restart => permanent, type => worker},
     Store = #{id => fenrir_recipe_store,
               start => {fenrir_recipe_store, start_link, []},
               restart => permanent, type => worker},
@@ -22,4 +25,4 @@ init([]) ->
     JobSup = #{id => fenrir_job_sup,
                start => {fenrir_job_sup, start_link, []},
                restart => permanent, type => supervisor},
-    {ok, {SupFlags, [Store, Confidence, Drift, Healer, JobSup]}}.
+    {ok, {SupFlags, [Metrics, Store, Confidence, Drift, Healer, JobSup]}}.
